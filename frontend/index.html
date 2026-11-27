@@ -54,9 +54,12 @@
 
         <main class="main-content">
             <section id="view-dashboard" class="app-view active animate-fade-in">
-                <div class="header-actions">
+                <div class="header-actions" style="flex-wrap: wrap; gap: 12px;">
                     <h1>Visão Geral</h1>
-                    <div class="month-filter"><input type="month" id="filter-month" class="date-picker"></div>
+                    <div class="month-filter" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="month" id="filter-month" class="date-picker">
+                        <button type="button" id="btn-export-month-csv" class="btn outline" style="width: auto; padding: 10px 14px; font-size: 13px;">📥 Exportar Mês (CSV)</button>
+                    </div>
                 </div>
                 
                 <div class="summary-cards">
@@ -142,17 +145,24 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 24px;">
-                    <h3 style="color: var(--primary); margin-bottom: 16px;">Evolução Mês a Mês</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+                        <h3 style="color: var(--primary); margin: 0;">Evolução Mês a Mês</h3>
+                        <div style="display: flex; gap: 12px; font-size: 12px; color: #475569; font-weight: 600;">
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--success);margin-right:4px;"></i>Receitas Pagas</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--danger);margin-right:4px;"></i>Despesas Pagas</span>
+                        </div>
+                    </div>
+                    <div id="annual-visual-chart" class="annual-bars-grid"></div>
                     <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                        <table class="report-table">
                             <thead>
-                                <tr style="border-bottom: 2px solid var(--border); color: #475569;">
-                                    <th style="padding: 10px 8px;">Mês</th>
-                                    <th style="padding: 10px 8px;">Receitas (Pagas)</th>
-                                    <th style="padding: 10px 8px;">Despesas (Pagas)</th>
-                                    <th style="padding: 10px 8px;">A Pagar</th>
-                                    <th style="padding: 10px 8px;">Saldo do Mês</th>
-                                    <th style="padding: 10px 8px;">Acumulado Ano</th>
+                                <tr>
+                                    <th>Mês</th>
+                                    <th>Receitas (Pagas)</th>
+                                    <th>Despesas (Pagas)</th>
+                                    <th>A Pagar</th>
+                                    <th>Saldo do Mês</th>
+                                    <th>Acumulado Ano</th>
                                 </tr>
                             </thead>
                             <tbody id="annual-monthly-tbody"></tbody>
