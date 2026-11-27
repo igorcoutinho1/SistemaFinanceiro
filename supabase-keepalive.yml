@@ -1,0 +1,24 @@
+name: Manter Supabase Ativo
+
+on:
+  schedule:
+    # Executa a cada 3 dias às 10:00 UTC (07:00 no horário de Brasília)
+    - cron: '0 10 */3 * *'
+  # Permite rodar manualmente pela aba Actions para testar agora
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar endpoint REST do Supabase
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/transactions?select=id&limit=1")
+          echo "Status HTTP retornado: $STATUS"
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Falha ao comunicar com o Supabase."
+            exit 1
+          fi
