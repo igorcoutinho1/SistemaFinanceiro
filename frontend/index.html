@@ -68,12 +68,32 @@
                     <div class="summary-card expense-card"><h4>Despesas (Neste Mês)</h4><h2 id="summary-expense">R$ 0,00</h2></div>
                 </div>
 
+                <div class="card" style="margin-bottom: 24px; padding: 16px 20px;">
+                    <h4 style="color: #475569; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Saldos Reais por Carteira</h4>
+                    <div id="wallet-balances-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;"></div>
+                </div>
+
                 <div class="card" style="margin-bottom: 30px;">
                     <h3 style="color: var(--primary); margin-bottom: 20px;">Despesas por Categoria (Orçamento)</h3>
                     <div id="category-charts-container"></div>
                 </div>
 
-                <h3 class="section-title">Lançamentos deste Mês</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 15px;">
+                    <h3 class="section-title" style="margin: 0;">Lançamentos deste Mês</h3>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <div id="filter-status-group" style="display: flex; gap: 6px;">
+                            <button type="button" class="btn primary status-filter-btn" data-status="all" style="width: auto; padding: 6px 12px; font-size: 12px;">Todos</button>
+                            <button type="button" class="btn outline status-filter-btn" data-status="pending" style="width: auto; padding: 6px 12px; font-size: 12px;">⏳ Pendentes</button>
+                            <button type="button" class="btn outline status-filter-btn" data-status="paid" style="width: auto; padding: 6px 12px; font-size: 12px;">✅ Pagos</button>
+                        </div>
+                        <select id="filter-wallet" style="padding: 6px 10px; font-size: 12px; width: auto; border-radius: 6px;">
+                            <option value="all">Todas as Carteiras</option>
+                            <option value="Conta Principal">Conta Principal</option>
+                            <option value="Vale Alimentação">Vale Alimentação</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                        </select>
+                    </div>
+                </div>
                 <ul id="transactions-list" class="expense-list"></ul>
             </section>
 
