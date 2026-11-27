@@ -8,7 +8,9 @@ const ui = {
     transactionsList: document.getElementById('transactions-list'), btnAddTrx: document.getElementById('btn-add-trx'),
     summaryTotal: document.getElementById('summary-total'), summaryPrevious: document.getElementById('summary-previous'),
     summaryIncome: document.getElementById('summary-income'), summaryExpense: document.getElementById('summary-expense'),
-    filterMonth: document.getElementById('filter-month'), categoryCharts: document.getElementById('category-charts-container'),
+    walletBalancesContainer: document.getElementById('wallet-balances-container'),
+    filterMonth: document.getElementById('filter-month'), filterWallet: document.getElementById('filter-wallet'),
+    categoryCharts: document.getElementById('category-charts-container'),
     btnSaveSettings: document.getElementById('btn-save-settings'), settingsMsg: document.getElementById('settings-msg'),
     setSalary: document.getElementById('set-salary'), setVa: document.getElementById('set-va'), setVaDay: document.getElementById('set-va-day'),
     adminFamilyPanel: document.getElementById('admin-family-panel'), memberFamilyPanel: document.getElementById('member-family-panel'),
@@ -27,6 +29,17 @@ let currentUserId = null;
 let currentUserRole = 'member';
 let userMetadata = {};
 let pendingTransactionIdToPay = null;
+let currentMonthTransactions = [];
+let activeStatusFilter = 'all';
+let activeWalletFilter = 'all';
+
+function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function getFirstName() {
+    return (userMetadata.full_name || ui.userName.textContent || 'Titular').trim().split(' ')[0];
+}
 
 const menuItems = document.querySelectorAll('.menu-item');
 const views = document.querySelectorAll('.app-view');
@@ -43,6 +56,24 @@ const now = new Date();
 ui.filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 document.getElementById('trx-date').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 ui.filterMonth.addEventListener('change', () => { if (currentGroupId) loadTransactions(); });
+
+document.querySelectorAll('.status-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.status-filter-btn').forEach(b => {
+            b.classList.remove('primary');
+            b.classList.add('outline');
+        });
+        btn.classList.remove('outline');
+        btn.classList.add('primary');
+        activeStatusFilter = btn.getAttribute('data-status');
+        renderTransactionsList();
+    });
+});
+
+ui.filterWallet.addEventListener('change', (e) => {
+    activeWalletFilter = e.target.value;
+    renderTransactionsList();
+});
 
 function hideAuthForms() {
     ui.loginForm.style.display = 'none';
@@ -178,7 +209,7 @@ async function loadFamilyMembers() {
         const removeBtn = (m.role !== 'admin' && m.user_id !== currentUserId)
             ? `<button class="btn-icon btn-remove-member" data-uid="${m.user_id}" title="Remover do grupo">🗑️</button>` : '';
         return `<li class="expense-item type-income" style="padding: 10px 14px;">
-            <div class="item-info"><strong>${m.member_label || 'Integrante'}</strong> ${roleTag}</div>
+            <div class="item-info"><strong>${escapeHtml(m.member_label || 'Integrante')}</strong> ${roleTag}</div>
             <div class="actions-cell">${removeBtn}</div>
         </li>`;
     }).join('');
@@ -253,6 +284,66 @@ function getFifthBusinessDay(year, month) {
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function renderWalletBalances(walletTotals) {
+    const walletMeta = {
+        'Conta Principal': { icon: '🏦', bg: '#f0f9ff', border: '#bae6fd' },
+        'Vale Alimentação': { icon: '🛒', bg: '#f0fdf4', border: '#bbf7d0' },
+        'Cartão de Crédito': { icon: '💳', bg: '#fef2f2', border: '#fecaca' }
+    };
+
+    ui.walletBalancesContainer.innerHTML = Object.entries(walletTotals).map(([wallet, val]) => {
+        const meta = walletMeta[wallet] || { icon: '💼', bg: '#f8fafc', border: '#e2e8f0' };
+        const color = val >= 0 ? 'var(--success)' : 'var(--danger)';
+        return `<div style="background:${meta.bg}; border:1px solid ${meta.border}; border-radius:8px; padding:12px 14px;">
+            <div style="font-size:12px; color:#475569; font-weight:600;">${meta.icon} ${escapeHtml(wallet)}</div>
+            <div style="font-size:18px; font-weight:700; color:${color}; margin-top:4px;">R$ ${val.toFixed(2).replace('.', ',')}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderTransactionsList() {
+    const isAdmin = currentUserRole === 'admin';
+    const filtered = currentMonthTransactions.filter(t => {
+        const matchStatus = activeStatusFilter === 'all' || t.status === activeStatusFilter;
+        const matchWallet = activeWalletFilter === 'all' || (t.wallet_name || 'Conta Principal') === activeWalletFilter;
+        return matchStatus && matchWallet;
+    });
+
+    if (filtered.length === 0) {
+        ui.transactionsList.innerHTML = '<p style="text-align:center; color:#94a3b8; padding: 20px;">Nenhum lançamento encontrado para os filtros selecionados.</p>';
+        return;
+    }
+
+    ui.transactionsList.innerHTML = filtered.map(t => {
+        const isIncome = t.type === 'income';
+        const sign = isIncome ? '+' : '-';
+        const typeClass = isIncome ? 'type-income' : 'type-expense';
+        const colorClass = isIncome ? 'val-income' : 'val-expense';
+        const statusClass = t.status === 'paid' ? '' : 'status-pending';
+        const statusBadge = t.status === 'paid' ? '<span class="badge badge-paid">Pago</span>' : '<span class="badge badge-pending">Pendente</span>';
+        const autoDebitBadge = t.auto_debit ? '<span class="badge badge-auto">🔄 Débito Auto</span>' : '';
+        const toggleIcon = t.status === 'paid' ? '✅' : '⏳';
+        const dateObj = new Date(t.due_date + 'T00:00:00');
+        const dateStr = dateObj.toLocaleDateString('pt-BR').substring(0, 5);
+        const installText = t.installment_info ? ` <i>(${escapeHtml(t.installment_info)})</i>` : '';
+        const receiptHtml = t.receipt_url ? `<a href="${escapeHtml(t.receipt_url)}" target="_blank" rel="noopener noreferrer" class="receipt-link">📎 Ver Recibo</a>` : '';
+        const authorTag = t.created_by_name ? `<span style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-size:11px; color:#475569;">👤 ${escapeHtml(t.created_by_name)}</span>` : '';
+        const deleteBtnHtml = isAdmin ? `<button class="btn-icon btn-delete" data-id="${t.id}" title="Excluir" style="font-size: 16px;">🗑️</button>` : '';
+
+        return `<li class="expense-item ${typeClass} ${statusClass} animate-fade-in">
+            <div class="item-info">
+                <div class="item-header"><strong>${escapeHtml(t.title)} ${installText}</strong> ${statusBadge} ${autoDebitBadge} ${receiptHtml}</div>
+                <div class="item-meta"><span>📅 ${dateStr}</span><span>📂 ${escapeHtml(t.category_name)}</span><span>💼 ${escapeHtml(t.wallet_name)}</span>${authorTag}</div>
+            </div>
+            <div class="item-value"><div class="${colorClass}">${sign} R$ ${Number(t.amount).toFixed(2)}</div></div>
+            <div class="actions-cell">
+                <button class="btn-icon btn-toggle-status" data-id="${t.id}" data-status="${t.status}" data-type="${t.type}" title="Pagar / Receber / Pendente">${toggleIcon}</button>
+                ${deleteBtnHtml}
+            </div>
+        </li>`;
+    }).join('');
+}
+
 async function loadTransactions() {
     const [yyyyStr, mmStr] = ui.filterMonth.value.split('-');
     const startDate = `${yyyyStr}-${mmStr}-01`;
@@ -266,7 +357,7 @@ async function loadTransactions() {
     const todayReal = new Date();
     const todayStr = `${todayReal.getFullYear()}-${String(todayReal.getMonth() + 1).padStart(2, '0')}-${String(todayReal.getDate()).padStart(2, '0')}`;
 
-    const firstName = (userMetadata.full_name || 'Titular').trim().split(' ')[0];
+    const firstName = getFirstName();
     const salaryTitle = `Salário Automático - ${firstName}`;
     const vaTitle = `VA Automático - ${firstName}`;
 
@@ -278,7 +369,8 @@ async function loadTransactions() {
         const stat = date5th <= todayStr ? 'paid' : 'pending';
         await supabase.from('transactions').insert([{
             financial_group_id: currentGroupId, type: 'income', status: stat, due_date: date5th,
-            amount: userMetadata.fixed_salary, title: salaryTitle, category_name: 'Salário', wallet_name: 'Conta Principal'
+            amount: userMetadata.fixed_salary, title: salaryTitle, category_name: 'Salário',
+            wallet_name: 'Conta Principal', created_by: currentUserId, created_by_name: firstName
         }]);
         needsRefresh = true;
     }
@@ -289,7 +381,8 @@ async function loadTransactions() {
         const stat = dateVA <= todayStr ? 'paid' : 'pending';
         await supabase.from('transactions').insert([{
             financial_group_id: currentGroupId, type: 'income', status: stat, due_date: dateVA,
-            amount: userMetadata.fixed_va, title: vaTitle, category_name: 'Vale Alimentação', wallet_name: 'Vale Alimentação'
+            amount: userMetadata.fixed_va, title: vaTitle, category_name: 'Vale Alimentação',
+            wallet_name: 'Vale Alimentação', created_by: currentUserId, created_by_name: firstName
         }]);
         needsRefresh = true;
     }
@@ -303,58 +396,43 @@ async function loadTransactions() {
 
     if (needsRefresh) {
         const res = await supabase.from('transactions').select('*').eq('financial_group_id', currentGroupId).gte('due_date', startDate).lte('due_date', endDate).order('due_date', { ascending: true });
-        data = res.data;
+        data = res.data || [];
     }
 
-    const { data: pastData } = await supabase.from('transactions').select('amount, type').eq('financial_group_id', currentGroupId).lt('due_date', startDate).eq('status', 'paid');
+    currentMonthTransactions = data;
+
+    const { data: pastData } = await supabase.from('transactions').select('amount, type, wallet_name').eq('financial_group_id', currentGroupId).lt('due_date', startDate).eq('status', 'paid');
     let previousBalance = 0;
+    const walletTotals = { 'Conta Principal': 0, 'Vale Alimentação': 0, 'Cartão de Crédito': 0 };
+
     if (pastData) {
         pastData.forEach(t => {
-            if (t.type === 'income') previousBalance += Number(t.amount);
-            else previousBalance -= Number(t.amount);
+            const delta = t.type === 'income' ? Number(t.amount) : -Number(t.amount);
+            previousBalance += delta;
+            const w = t.wallet_name || 'Conta Principal';
+            walletTotals[w] = (walletTotals[w] || 0) + delta;
         });
     }
 
     let totalIncome = 0; let totalExpense = 0; const categoryTotals = {};
-    const isAdmin = currentUserRole === 'admin';
-
-    ui.transactionsList.innerHTML = data.map(t => {
+    data.forEach(t => {
         const isIncome = t.type === 'income';
-        if (isIncome) {
-            if (t.status === 'paid') totalIncome += Number(t.amount);
-        } else {
-            if (t.status === 'paid') totalExpense += Number(t.amount);
-            const cat = t.category_name || 'Outros';
-            categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(t.amount);
+        const amt = Number(t.amount);
+        if (t.status === 'paid') {
+            const w = t.wallet_name || 'Conta Principal';
+            walletTotals[w] = (walletTotals[w] || 0) + (isIncome ? amt : -amt);
         }
+        if (isIncome) {
+            if (t.status === 'paid') totalIncome += amt;
+        } else {
+            if (t.status === 'paid') totalExpense += amt;
+            const cat = t.category_name || 'Outros';
+            categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+        }
+    });
 
-        const sign = isIncome ? '+' : '-';
-        const typeClass = isIncome ? 'type-income' : 'type-expense';
-        const colorClass = isIncome ? 'val-income' : 'val-expense';
-        const statusClass = t.status === 'paid' ? '' : 'status-pending';
-        const statusBadge = t.status === 'paid' ? '<span class="badge badge-paid">Pago</span>' : '<span class="badge badge-pending">Pendente</span>';
-        const autoDebitBadge = t.auto_debit ? '<span class="badge badge-auto">🔄 Débito Auto</span>' : '';
-        const toggleIcon = t.status === 'paid' ? '✅' : '⏳';
-        const dateObj = new Date(t.due_date + 'T00:00:00');
-        const dateStr = dateObj.toLocaleDateString('pt-BR').substring(0, 5);
-        const installText = t.installment_info ? ` <i>(${t.installment_info})</i>` : '';
-        const receiptHtml = t.receipt_url ? `<a href="${t.receipt_url}" target="_blank" class="receipt-link">📎 Ver Recibo</a>` : '';
-        const deleteBtnHtml = isAdmin ? `<button class="btn-icon btn-delete" data-id="${t.id}" title="Excluir" style="font-size: 16px;">🗑️</button>` : '';
-
-        return `<li class="expense-item ${typeClass} ${statusClass} animate-fade-in">
-            <div class="item-info">
-                <div class="item-header"><strong>${t.title} ${installText}</strong> ${statusBadge} ${autoDebitBadge} ${receiptHtml}</div>
-                <div class="item-meta"><span>📅 ${dateStr}</span><span>📂 ${t.category_name}</span><span>💼 ${t.wallet_name}</span></div>
-            </div>
-            <div class="item-value"><div class="${colorClass}">${sign} R$ ${Number(t.amount).toFixed(2)}</div></div>
-            <div class="actions-cell">
-                <button class="btn-icon btn-toggle-status" data-id="${t.id}" data-status="${t.status}" data-type="${t.type}" title="Pagar / Receber / Pendente">${toggleIcon}</button>
-                ${deleteBtnHtml}
-            </div>
-        </li>`;
-    }).join('');
-
-    if (data.length === 0) ui.transactionsList.innerHTML = '<p style="text-align:center; color:#94a3b8; padding: 20px;">Nenhum lançamento neste mês.</p>';
+    renderWalletBalances(walletTotals);
+    renderTransactionsList();
 
     const totalDespesasParaGrafico = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
     if (totalDespesasParaGrafico === 0) {
@@ -362,7 +440,7 @@ async function loadTransactions() {
     } else {
         ui.categoryCharts.innerHTML = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).map(([cat, val]) => {
             const pct = (val / totalDespesasParaGrafico) * 100;
-            return `<div class="animate-fade-in"><div class="chart-label"><span>${cat}</span><span class="chart-value">R$ ${val.toFixed(2)} <span style="color:#64748b; font-weight:normal; font-size:12px;">(${pct.toFixed(0)}%)</span></span></div><div class="chart-bar-bg"><div class="chart-bar-fill" style="width: ${pct}%"></div></div></div>`;
+            return `<div class="animate-fade-in"><div class="chart-label"><span>${escapeHtml(cat)}</span><span class="chart-value">R$ ${val.toFixed(2)} <span style="color:#64748b; font-weight:normal; font-size:12px;">(${pct.toFixed(0)}%)</span></span></div><div class="chart-bar-bg"><div class="chart-bar-fill" style="width: ${pct}%"></div></div></div>`;
         }).join('');
     }
 
@@ -390,6 +468,7 @@ ui.btnAddTrx.addEventListener('click', async () => {
 
     const recordsToInsert = [];
     const [yyyy, mm, dd] = baseDate.split('-').map(Number);
+    const authorName = getFirstName();
 
     for (let i = 0; i < installments; i++) {
         let newM = mm + i;
@@ -402,7 +481,8 @@ ui.btnAddTrx.addEventListener('click', async () => {
             auto_debit: isAutoDebit, due_date: `${newY}-${String(newM).padStart(2, '0')}-${String(newD).padStart(2, '0')}`,
             amount, title: baseTitle, category_name: document.getElementById('trx-category').value || 'Geral',
             wallet_name: document.getElementById('trx-wallet').value || 'Conta Principal',
-            installment_info: installments > 1 ? `${i + 1}/${installments}` : null
+            installment_info: installments > 1 ? `${i + 1}/${installments}` : null,
+            created_by: currentUserId, created_by_name: authorName
         });
     }
 
