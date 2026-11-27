@@ -74,7 +74,7 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 30px;">
-                    <h3 style="color: var(--primary); margin-bottom: 20px;">Despesas por Categoria (Orçamento)</h3>
+                    <h3 style="color: var(--primary); margin-bottom: 20px;">Despesas por Categoria (Orçamento e Metas)</h3>
                     <div id="category-charts-container"></div>
                 </div>
 
@@ -109,7 +109,7 @@
                     <div class="form-grid">
                         <div class="input-group" style="grid-column: span 2;"><label>Descrição</label><input type="text" id="trx-title" placeholder="Ex: Conta de Luz" required></div>
                         <div class="input-group"><label>Categoria</label><input type="text" id="trx-category" placeholder="Ex: Alimentação" list="category-list">
-                            <datalist id="category-list"><option value="Alimentação"><option value="Moradia"><option value="Transporte"><option value="Lazer"></datalist>
+                            <datalist id="category-list"><option value="Alimentação"><option value="Moradia"><option value="Transporte"><option value="Lazer"><option value="Saúde"><option value="Educação"></datalist>
                         </div>
                         <div class="input-group"><label>Carteira / Conta</label><select id="trx-wallet"><option value="Conta Principal">Conta Principal</option><option value="Vale Alimentação">Vale Alimentação</option><option value="Cartão de Crédito">Cartão de Crédito</option></select></div>
                     </div>
@@ -137,11 +137,23 @@
                     <p id="settings-msg" class="msg"></p>
                 </div>
 
+                <div id="admin-budgets-panel" class="card form-card" style="display: none; margin-bottom: 24px;">
+                    <h3 style="color: #d97706;">🎯 Metas de Gastos por Categoria (Administrador)</h3>
+                    <p style="font-size: 13px; color: #64748b; margin-bottom: 15px;">Defina o teto mensal por categoria. O Dashboard alertará automaticamente quando os gastos atingirem 80% ou ultrapassarem 100% do limite.</p>
+                    <div class="form-grid">
+                        <div class="input-group"><label>Categoria</label><input type="text" id="budget-category" placeholder="Ex: Alimentação" list="category-list"></div>
+                        <div class="input-group"><label>Limite Mensal (R$)</label><input type="number" id="budget-limit" placeholder="800.00" step="0.01" min="1"></div>
+                    </div>
+                    <button id="btn-save-budget" class="btn primary" style="width: auto; background-color: #d97706;">Salvar Meta</button>
+                    <p id="budget-msg" class="msg"></p>
+                    <ul id="budgets-list" class="expense-list" style="margin-top: 15px;"></ul>
+                </div>
+
                 <div class="card form-card">
                     <h3 style="color: var(--primary);">👨‍👩‍👧 Módulo Família e Permissões</h3>
                     
                     <div id="admin-family-panel" style="display: none; margin-top: 15px;">
-                        <p style="font-size: 13px; color: #475569; margin-bottom: 12px;">Você é o <strong>Administrador</strong> deste grupo financeiro. Gere um código válido por 48h para vincular outro membro (somente você pode excluir lançamentos).</p>
+                        <p style="font-size: 13px; color: #475569; margin-bottom: 12px;">Você é o <strong>Administrador</strong> deste grupo financeiro. Gere um código válido por 48h para vincular outro membro (somente você pode excluir lançamentos e alterar metas).</p>
                         <button id="btn-generate-invite" class="btn primary" style="width: auto;">🔑 Gerar Código de Convite</button>
                         
                         <div id="invite-code-box" style="display: none; margin-top: 15px; padding: 14px; background: #f0f9ff; border: 1px dashed #0284c7; border-radius: 8px;">
@@ -158,7 +170,7 @@
                     </div>
 
                     <div id="member-family-panel" style="display: none; margin-top: 15px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);">
-                        <p style="font-size: 13px; color: #334155; margin: 0;">Você está conectado como <strong>Membro da Família</strong>. Você pode visualizar o painel completo, lançar receitas/despesas e anexar comprovantes. A exclusão de registros é restrita ao Administrador.</p>
+                        <p style="font-size: 13px; color: #334155; margin: 0;">Você está conectado como <strong>Membro da Família</strong>. Você pode visualizar o painel completo, acompanhar as metas de orçamento, lançar receitas/despesas e anexar comprovantes.</p>
                     </div>
 
                     <div id="join-family-panel" style="margin-top: 20px; padding-top: 18px; border-top: 1px dashed var(--border);">
