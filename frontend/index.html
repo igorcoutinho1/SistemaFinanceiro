@@ -44,6 +44,7 @@
             <nav class="menu">
                 <button class="menu-item active" data-target="view-dashboard">📊 Dashboard</button>
                 <button class="menu-item" data-target="view-transactions">💸 Lançamentos</button>
+                <button class="menu-item" data-target="view-reports">📈 Relatórios</button>
                 <button class="menu-item" data-target="view-settings">⚙️ Configurações</button>
             </nav>
             <div class="sidebar-footer">
@@ -120,6 +121,48 @@
                         <div class="input-group"><label style="color: #64748b;">Repetir (Meses / Parcelas)</label><input type="number" id="trx-installments" value="1" min="1" max="360"></div>
                     </div>
                     <button id="btn-add-trx" class="btn primary" style="margin-top: 10px;">Gravar Lançamento</button>
+                </div>
+            </section>
+
+            <section id="view-reports" class="app-view animate-fade-in" style="display: none;">
+                <div class="header-actions" style="flex-wrap: wrap; gap: 12px;">
+                    <h1>Relatório Anual Consolidado</h1>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="number" id="report-year" min="2020" max="2100" class="date-picker" style="width: 105px;">
+                        <button type="button" id="btn-export-year-csv" class="btn primary" style="width: auto; background-color: var(--success);">📥 Lançamentos (CSV)</button>
+                        <button type="button" id="btn-export-summary-csv" class="btn outline" style="width: auto;">📊 Resumo Mensal (CSV)</button>
+                    </div>
+                </div>
+
+                <div class="summary-cards">
+                    <div class="summary-card income-card"><h4>Receitas Liquidadas (Ano)</h4><h2 id="rep-year-income">R$ 0,00</h2></div>
+                    <div class="summary-card expense-card"><h4>Despesas Liquidadas (Ano)</h4><h2 id="rep-year-expense">R$ 0,00</h2></div>
+                    <div class="summary-card"><h4>Balanço Líquido (Ano)</h4><h2 id="rep-year-balance">R$ 0,00</h2></div>
+                    <div class="summary-card"><h4>Despesas Pendentes (Ano)</h4><h2 id="rep-year-pending" style="color: #d97706;">R$ 0,00</h2></div>
+                </div>
+
+                <div class="card" style="margin-bottom: 24px;">
+                    <h3 style="color: var(--primary); margin-bottom: 16px;">Evolução Mês a Mês</h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border); color: #475569;">
+                                    <th style="padding: 10px 8px;">Mês</th>
+                                    <th style="padding: 10px 8px;">Receitas (Pagas)</th>
+                                    <th style="padding: 10px 8px;">Despesas (Pagas)</th>
+                                    <th style="padding: 10px 8px;">A Pagar</th>
+                                    <th style="padding: 10px 8px;">Saldo do Mês</th>
+                                    <th style="padding: 10px 8px;">Acumulado Ano</th>
+                                </tr>
+                            </thead>
+                            <tbody id="annual-monthly-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--primary); margin-bottom: 16px;">Despesas Consolidadas por Categoria no Ano</h3>
+                    <div id="annual-category-charts"></div>
                 </div>
             </section>
 
