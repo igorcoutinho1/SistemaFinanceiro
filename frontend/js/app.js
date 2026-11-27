@@ -13,6 +13,9 @@ const ui = {
     categoryCharts: document.getElementById('category-charts-container'),
     btnSaveSettings: document.getElementById('btn-save-settings'), settingsMsg: document.getElementById('settings-msg'),
     setSalary: document.getElementById('set-salary'), setVa: document.getElementById('set-va'), setVaDay: document.getElementById('set-va-day'),
+    adminBudgetsPanel: document.getElementById('admin-budgets-panel'), budgetCategory: document.getElementById('budget-category'),
+    budgetLimit: document.getElementById('budget-limit'), btnSaveBudget: document.getElementById('btn-save-budget'),
+    budgetMsg: document.getElementById('budget-msg'), budgetsList: document.getElementById('budgets-list'),
     adminFamilyPanel: document.getElementById('admin-family-panel'), memberFamilyPanel: document.getElementById('member-family-panel'),
     btnGenerateInvite: document.getElementById('btn-generate-invite'), inviteCodeBox: document.getElementById('invite-code-box'),
     generatedInviteCode: document.getElementById('generated-invite-code'), btnCopyInvite: document.getElementById('btn-copy-invite'),
@@ -30,6 +33,7 @@ let currentUserRole = 'member';
 let userMetadata = {};
 let pendingTransactionIdToPay = null;
 let currentMonthTransactions = [];
+let groupBudgets = [];
 let activeStatusFilter = 'all';
 let activeWalletFilter = 'all';
 
@@ -171,6 +175,7 @@ function applyRoleUI() {
     const isAdmin = currentUserRole === 'admin';
     ui.userRoleBadge.textContent = isAdmin ? '👑 Administrador' : '👤 Membro';
     ui.userRoleBadge.className = isAdmin ? 'badge badge-paid' : 'badge badge-auto';
+    ui.adminBudgetsPanel.style.display = isAdmin ? 'block' : 'none';
     ui.adminFamilyPanel.style.display = isAdmin ? 'block' : 'none';
     ui.memberFamilyPanel.style.display = isAdmin ? 'none' : 'block';
 }
@@ -197,6 +202,63 @@ async function initDashboard(user) {
         await loadTransactions();
     }
 }
+
+async function loadBudgets() {
+    const { data } = await supabase.from('category_budgets').select('*').eq('financial_group_id', currentGroupId).order('category_name', { ascending: true });
+    groupBudgets = data || [];
+    if (currentUserRole === 'admin' && ui.budgetsList) {
+        if (groupBudgets.length === 0) {
+            ui.budgetsList.innerHTML = '<li style="color:#94a3b8; font-size:13px;">Nenhuma meta cadastrada.</li>';
+        } else {
+            ui.budgetsList.innerHTML = groupBudgets.map(b => `
+                <li class="expense-item type-expense" style="padding: 10px 14px;">
+                    <div class="item-info"><strong>📂 ${escapeHtml(b.category_name)}</strong></div>
+                    <div class="item-value"><div style="font-weight:700; color:#d97706;">Teto: R$ ${Number(b.monthly_limit).toFixed(2).replace('.', ',')}</div></div>
+                    <div class="actions-cell"><button class="btn-icon btn-delete-budget" data-id="${b.id}" title="Excluir meta">🗑️</button></div>
+                </li>
+            `).join('');
+        }
+    }
+}
+
+ui.btnSaveBudget.addEventListener('click', async () => {
+    if (currentUserRole !== 'admin') return;
+    const cat = ui.budgetCategory.value.trim();
+    const limit = parseFloat(ui.budgetLimit.value);
+    if (!cat || isNaN(limit) || limit <= 0) {
+        ui.budgetMsg.style.color = 'var(--danger)';
+        ui.budgetMsg.textContent = 'Informe uma categoria válida e um limite maior que zero.';
+        return;
+    }
+    if (!confirm(`Definir teto mensal de R$ ${limit.toFixed(2)} para a categoria "${cat}"?`)) return;
+
+    ui.btnSaveBudget.disabled = true;
+    const { error } = await supabase.from('category_budgets').upsert(
+        { financial_group_id: currentGroupId, category_name: cat, monthly_limit: limit },
+        { onConflict: 'financial_group_id,category_name' }
+    );
+    ui.btnSaveBudget.disabled = false;
+
+    if (error) {
+        ui.budgetMsg.style.color = 'var(--danger)';
+        ui.budgetMsg.textContent = 'Erro ao salvar meta: ' + error.message;
+    } else {
+        ui.budgetCategory.value = '';
+        ui.budgetLimit.value = '';
+        ui.budgetMsg.style.color = 'var(--success)';
+        ui.budgetMsg.textContent = 'Meta salva com sucesso!';
+        await loadTransactions();
+    }
+});
+
+ui.budgetsList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-delete-budget');
+    if (!btn || currentUserRole !== 'admin') return;
+    if (confirm('Deseja remover este limite de categoria?')) {
+        await supabase.from('category_budgets').delete().eq('id', btn.getAttribute('data-id'));
+        await loadTransactions();
+    }
+});
 
 async function loadFamilyMembers() {
     const { data } = await supabase.from('memberships').select('user_id, role, member_label').eq('financial_group_id', currentGroupId);
@@ -301,6 +363,69 @@ function renderWalletBalances(walletTotals) {
     }).join('');
 }
 
+function renderCategoryCharts(categoryTotals) {
+    const budgetMap = {};
+    groupBudgets.forEach(b => {
+        budgetMap[b.category_name.trim().toLowerCase()] = { label: b.category_name.trim(), limit: Number(b.monthly_limit) };
+    });
+
+    const mergedCategories = {};
+    Object.entries(budgetMap).forEach(([key, info]) => {
+        mergedCategories[key] = { label: info.label, spent: 0, limit: info.limit };
+    });
+
+    Object.entries(categoryTotals).forEach(([cat, val]) => {
+        const key = cat.trim().toLowerCase();
+        if (mergedCategories[key]) {
+            mergedCategories[key].spent += val;
+        } else {
+            mergedCategories[key] = { label: cat.trim(), spent: val, limit: null };
+        }
+    });
+
+    const entries = Object.values(mergedCategories);
+    const totalDespesasGeral = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
+
+    if (entries.length === 0) {
+        ui.categoryCharts.innerHTML = '<p style="color:#94a3b8; font-size: 13px;">Nenhuma despesa ou meta registada neste mês.</p>';
+        return;
+    }
+
+    ui.categoryCharts.innerHTML = entries.sort((a, b) => b.spent - a.spent).map(item => {
+        if (item.limit && item.limit > 0) {
+            const rawPct = (item.spent / item.limit) * 100;
+            const barWidth = Math.min(rawPct, 100);
+            let barColor = 'var(--success)';
+            let alertBadge = '';
+
+            if (rawPct >= 100) {
+                barColor = 'var(--danger)';
+                alertBadge = '<span class="badge badge-pending" style="background:#fee2e2; color:#b91c1c; margin-left:6px;">🚨 Limite Excedido</span>';
+            } else if (rawPct >= 80) {
+                barColor = '#f59e0b';
+                alertBadge = '<span class="badge badge-pending" style="margin-left:6px;">⚠️ Próximo do Teto</span>';
+            }
+
+            return `<div class="animate-fade-in" style="margin-bottom: 12px;">
+                <div class="chart-label">
+                    <span>${escapeHtml(item.label)} ${alertBadge}</span>
+                    <span class="chart-value">R$ ${item.spent.toFixed(2)} <span style="color:#64748b; font-weight:normal; font-size:12px;">/ R$ ${item.limit.toFixed(2)} (${rawPct.toFixed(0)}%)</span></span>
+                </div>
+                <div class="chart-bar-bg"><div class="chart-bar-fill" style="width: ${barWidth}%; background-color: ${barColor};"></div></div>
+            </div>`;
+        } else {
+            const pct = totalDespesasGeral > 0 ? (item.spent / totalDespesasGeral) * 100 : 0;
+            return `<div class="animate-fade-in" style="margin-bottom: 12px;">
+                <div class="chart-label">
+                    <span>${escapeHtml(item.label)} <span style="font-size:11px; color:#94a3b8; font-weight:normal;">(sem meta)</span></span>
+                    <span class="chart-value">R$ ${item.spent.toFixed(2)} <span style="color:#64748b; font-weight:normal; font-size:12px;">(${pct.toFixed(0)}%)</span></span>
+                </div>
+                <div class="chart-bar-bg"><div class="chart-bar-fill" style="width: ${pct}%;"></div></div>
+            </div>`;
+        }
+    }).join('');
+}
+
 function renderTransactionsList() {
     const isAdmin = currentUserRole === 'admin';
     const filtered = currentMonthTransactions.filter(t => {
@@ -345,6 +470,8 @@ function renderTransactionsList() {
 }
 
 async function loadTransactions() {
+    await loadBudgets();
+
     const [yyyyStr, mmStr] = ui.filterMonth.value.split('-');
     const startDate = `${yyyyStr}-${mmStr}-01`;
     const maxDays = new Date(yyyyStr, mmStr, 0).getDate();
@@ -426,23 +553,14 @@ async function loadTransactions() {
             if (t.status === 'paid') totalIncome += amt;
         } else {
             if (t.status === 'paid') totalExpense += amt;
-            const cat = t.category_name || 'Outros';
+            const cat = (t.category_name || 'Outros').trim();
             categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
         }
     });
 
     renderWalletBalances(walletTotals);
+    renderCategoryCharts(categoryTotals);
     renderTransactionsList();
-
-    const totalDespesasParaGrafico = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
-    if (totalDespesasParaGrafico === 0) {
-        ui.categoryCharts.innerHTML = '<p style="color:#94a3b8; font-size: 13px;">Nenhuma despesa registada neste mês.</p>';
-    } else {
-        ui.categoryCharts.innerHTML = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).map(([cat, val]) => {
-            const pct = (val / totalDespesasParaGrafico) * 100;
-            return `<div class="animate-fade-in"><div class="chart-label"><span>${escapeHtml(cat)}</span><span class="chart-value">R$ ${val.toFixed(2)} <span style="color:#64748b; font-weight:normal; font-size:12px;">(${pct.toFixed(0)}%)</span></span></div><div class="chart-bar-bg"><div class="chart-bar-fill" style="width: ${pct}%"></div></div></div>`;
-        }).join('');
-    }
 
     const finalTotalBalance = previousBalance + (totalIncome - totalExpense);
     ui.summaryIncome.textContent = `R$ ${totalIncome.toFixed(2).replace('.', ',')}`;
@@ -469,6 +587,7 @@ ui.btnAddTrx.addEventListener('click', async () => {
     const recordsToInsert = [];
     const [yyyy, mm, dd] = baseDate.split('-').map(Number);
     const authorName = getFirstName();
+    const catName = (document.getElementById('trx-category').value || 'Geral').trim();
 
     for (let i = 0; i < installments; i++) {
         let newM = mm + i;
@@ -479,7 +598,7 @@ ui.btnAddTrx.addEventListener('click', async () => {
         recordsToInsert.push({
             financial_group_id: currentGroupId, type, status: (i === 0 ? selectedStatus : 'pending'),
             auto_debit: isAutoDebit, due_date: `${newY}-${String(newM).padStart(2, '0')}-${String(newD).padStart(2, '0')}`,
-            amount, title: baseTitle, category_name: document.getElementById('trx-category').value || 'Geral',
+            amount, title: baseTitle, category_name: catName,
             wallet_name: document.getElementById('trx-wallet').value || 'Conta Principal',
             installment_info: installments > 1 ? `${i + 1}/${installments}` : null,
             created_by: currentUserId, created_by_name: authorName
